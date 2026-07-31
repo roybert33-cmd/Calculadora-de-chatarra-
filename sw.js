@@ -1,0 +1,5 @@
+const CACHE_NAME='chatarra-pwa-v5';
+const ASSETS=['./','./index.html','./manifest.json','./icons/icon-192x192.png','./icons/icon-512x512.png'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(ASSETS)))});
+self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE_NAME).map(x=>caches.delete(x)))) )});
