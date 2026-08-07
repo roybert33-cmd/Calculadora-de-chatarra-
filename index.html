@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
   <title>Calculadora de Chatarra PRO</title>
   
-  <!-- ESTO FALTABA: Vinculación con PWA -->
+  <!-- CONEXIÓN PWA -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#facc15">
   <link rel="apple-touch-icon" href="icono-touch-de-apple.png">
-  
+
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -27,19 +27,174 @@
 <body>
   <div id="root"></div>
 
-  <!-- EL RESTO DE TU CÓDIGO REACT AQUÍ (App, materiales, etc...) -->
-
   <script type="text/babel">
-    // ... (Tu código React que ya tienes) ...
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- LISTA DE MATERIALES ACTUALIZADA ---
+    const MATERIALES_BASE = [
+      { id: "cobre", name: "Cobre", shortName: "COBRE", price: 6500, color: "bg-orange-700", unit: "kg" },
+      { id: "bronce", name: "Bronce", shortName: "BRONCE", price: 3800, color: "bg-amber-700", unit: "kg" },
+      { id: "acero_inox", name: "Acero Inoxidable", shortName: "INOX", price: 800, color: "bg-blue-900", unit: "kg" },
+      { id: "aluminio", name: "Aluminio Limpio", shortName: "ALU-L", price: 1100, color: "bg-slate-500", unit: "kg" },
+      { id: "aluminio_sucio", name: "Aluminio Sucio", shortName: "ALU-S", price: 600, color: "bg-slate-700", unit: "kg" },
+      { id: "rad_aluminio", name: "Radiador de Aluminio", shortName: "RAD-ALU", price: 600, color: "bg-stone-500", unit: "kg" },
+      { id: "rad_mixto", name: "Radiador Mixto", shortName: "RAD-MIX", price: 2800, color: "bg-yellow-700", unit: "kg" },
+      { id: "fierro_corto", name: "Fierro Corto", shortName: "FIERRO", price: 130, color: "bg-zinc-700", unit: "kg" },
+      { id: "lata_fierro", name: "Lata Fierro", shortName: "LATA", price: 90, color: "bg-zinc-600", unit: "kg" },
+      { id: "motor_unidad", name: "Motor (Unidad)", shortName: "MOTOR", price: 12000, color: "bg-purple-900", unit: "un" },
+      { id: "caja_vehiculo", name: "Caja de Vehículo", shortName: "CAJA-V", price: 15000, color: "bg-gray-800", unit: "un" },
+      { id: "bateria_unidad", name: "Batería (Unidad)", shortName: "BAT-UN", price: 15000, color: "bg-red-900", unit: "un" },
+      { id: "bateria_kilo", name: "Batería (Kilo)", shortName: "BAT-KG", price: 850, color: "bg-zinc-800", unit: "kg" },
+      { id: "calefon_unidad", name: "Calefón (Unidad)", shortName: "CALEF", price: 12000, color: "bg-amber-900", unit: "un" },
+      { id: "catalitico_unidad", name: "Catalítico (Unidad)", shortName: "CATAL", price: 35000, color: "bg-amber-700", unit: "un" }
+    ];
+
+    const BANCOS = ["Banco Estado", "Cuenta RUT", "Banco Santander", "Banco BCI", "Banco de Chile", "Scotiabank", "Itaú", "Mach", "Tenpo", "Otro"];
+
+    function App() {
+      const [materiales, setMateriales] = useState(MATERIALES_BASE);
+      const [pesos, setPesos] = useState({});
+      const [editandoPrecios, setEditandoPrecios] = useState(false);
+      const [empresaNombre, setEmpresaNombre] = useState("MI NEGOCIO");
+      const [whatsappJefe, setWhatsappJefe] = useState("");
+      const [clientes, setClientes] = useState([]);
+      const [busquedaCliente, setBusquedaCliente] = useState("");
+      const [mostrarClientes, setMostrarClientes] = useState(false);
+      const [mensajeStatus, setMensajeStatus] = useState("");
+      const [clienteForm, setClienteForm] = useState({ nombre: "", rut: "", cuenta: "", banco: "Banco Estado" });
+
+      useEffect(() => {
+        setEmpresaNombre(localStorage.getItem("app_empresa_nombre") || "MI NEGOCIO");
+        setWhatsappJefe(localStorage.getItem("app_whatsapp_jefe") || "");
+        try {
+          const storedClients = localStorage.getItem("app_clientes_v2");
+          if (storedClients) setClientes(JSON.parse(storedClients));
+          const storedPrices = localStorage.getItem("app_precios_personalizados");
+          if (storedPrices) setMateriales(JSON.parse(storedPrices));
+        } catch (e) { console.error(e); }
+      }, []);
+
+      useEffect(() => { localStorage.setItem("app_empresa_nombre", empresaNombre); }, [empresaNombre]);
+      useEffect(() => { localStorage.setItem("app_whatsapp_jefe", whatsappJefe); }, [whatsappJefe]);
+      useEffect(() => { localStorage.setItem("app_clientes_v2", JSON.stringify(clientes)); }, [clientes]);
+      useEffect(() => { localStorage.setItem("app_precios_personalizados", JSON.stringify(materiales)); }, [materiales]);
+
+      const formatearMoneda = (valor) => new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(valor || 0);
+      const formatearNumero = (val) => val ? val.toString().replace(".", ",") : "0";
+
+      const detalleVenta = useMemo(() => materiales.map(m => ({ ...m, peso: pesos[m.id] || 0, subtotal: (pesos[m.id] || 0) * m.price })), [materiales, pesos]);
+      const totalKilos = detalleVenta.reduce((acc, curr) => acc + (curr.unit === 'kg' ? curr.peso : 0), 0);
+      const totalPagar = detalleVenta.reduce((acc, curr) => acc + curr.subtotal, 0);
+
+      const ajustarPeso = (id, cant) => setPesos(prev => ({ ...prev, [id]: Math.max(0, parseFloat(((prev[id] || 0) + cant).toFixed(2))) }));
+      const manualPeso = (id, valor) => { const num = parseFloat(valor.replace(",", ".")); setPesos(prev => ({ ...prev, [id]: isNaN(num) ? 0 : num })); };
+      const editarPrecio = (id, nuevoPrecio) => setMateriales(prev => prev.map(m => m.id === id ? { ...m, price: Number(nuevoPrecio) } : m));
+
+      const guardarCliente = () => {
+        if (!clienteForm.nombre || !clienteForm.rut) return;
+        const index = clientes.findIndex(c => c.rut === clienteForm.rut);
+        if (index > -1) {
+          const nuevos = [...clientes]; nuevos[index] = { ...clienteForm, id: clientes[index].id };
+          setClientes(nuevos);
+        } else {
+          setClientes([{ ...clienteForm, id: Date.now() }, ...clientes]);
+        }
+        setMensajeStatus("✅ Guardado");
+        setTimeout(() => setMensajeStatus(""), 2000);
+      };
+
+      const enviarWhatsApp = () => {
+        if (!whatsappJefe) return alert("Configura el WhatsApp primero");
+        const fecha = new Date().toLocaleString("es-CL");
+        let txt = `*REPORTE - ${empresaNombre}*\n📅 ${fecha}\n👤 *CLIENTE:* ${clienteForm.nombre}\n🆔 *RUT:* ${clienteForm.rut}\n\n`;
+        detalleVenta.filter(m => m.peso > 0).forEach(m => {
+          txt += `- ${m.name}: ${formatearNumero(m.peso)} ${m.unit} x ${formatearMoneda(m.price)} = ${formatearMoneda(m.subtotal)}\n`;
+        });
+        txt += `\n💰 *TOTAL:* ${formatearMoneda(totalPagar)}\n🏦 ${clienteForm.banco} | Nº: ${clienteForm.cuenta}`;
+        window.open(`https://wa.me/${whatsappJefe.replace(/\D/g, "")}?text=${encodeURIComponent(txt)}`, "_blank");
+      };
+
+      return (
+        <div className="max-w-2xl mx-auto p-4 pb-36">
+          <header className="flex items-center justify-between mb-6 bg-zinc-900 p-4 rounded-2xl border border-zinc-800 shadow-lg">
+            <div>
+              <input value={empresaNombre} onChange={e => setEmpresaNombre(e.target.value.toUpperCase())} className="bg-transparent font-black text-xl text-yellow-400 outline-none w-full" />
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Calculadora de Compra</p>
+            </div>
+            <button onClick={() => setEditandoPrecios(!editandoPrecios)} className={`px-4 py-2 rounded-xl text-xs font-bold transition ${editandoPrecios ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-400'}`}>
+              {editandoPrecios ? 'LISTO' : 'EDITAR $'}
+            </button>
+          </header>
+
+          <section className="mb-6 bg-zinc-900 rounded-2xl border border-zinc-800 p-4 space-y-3">
+             <div className="flex justify-between items-center mb-2">
+                <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest">Datos Cliente</h3>
+                <span className="text-[10px] font-bold text-yellow-400">{mensajeStatus}</span>
+             </div>
+             <input placeholder="Nombre Completo" value={clienteForm.nombre} onChange={e => setClienteForm({...clienteForm, nombre: e.target.value})} className="bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none w-full" />
+             <div className="grid grid-cols-2 gap-2">
+                <input placeholder="RUT" value={clienteForm.rut} onChange={e => setClienteForm({...clienteForm, rut: e.target.value})} className="bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none" />
+                <input placeholder="Nº Cuenta" value={clienteForm.cuenta} onChange={e => setClienteForm({...clienteForm, cuenta: e.target.value})} className="bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none" />
+             </div>
+             <select value={clienteForm.banco} onChange={e => setClienteForm({...clienteForm, banco: e.target.value})} className="bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none w-full">
+                {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+             </select>
+             <button onClick={guardarCliente} className="w-full bg-zinc-800 py-2 rounded-xl text-[10px] font-black tracking-widest hover:bg-zinc-700 transition">GUARDAR CLIENTE</button>
+          </section>
+
+          <div className="space-y-3">
+            {materiales.map(m => (
+              <div key={m.id} className={`p-4 rounded-2xl border transition-all ${pesos[m.id] > 0 ? 'bg-zinc-800 border-yellow-400/50' : 'bg-zinc-900 border-zinc-800'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl ${m.color} flex items-center justify-center font-black text-[9px] text-white`}>{m.shortName}</div>
+                    <div>
+                      <h4 className="font-bold text-xs">{m.name}</h4>
+                      {editandoPrecios ? (
+                        <input type="number" value={m.price} onChange={e => editarPrecio(m.id, e.target.value)} className="bg-black border border-zinc-700 w-20 px-2 py-0.5 rounded text-xs font-bold text-yellow-400" />
+                      ) : (
+                        <p className="text-[10px] text-zinc-500 font-bold">{formatearMoneda(m.price)} / {m.unit}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => ajustarPeso(m.id, -1)} className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center active:scale-90">-</button>
+                    <input type="text" inputMode="decimal" value={pesos[m.id] === 0 ? "" : formatearNumero(pesos[m.id])} onChange={e => manualPeso(m.id, e.target.value)} placeholder="0" className="bg-black border border-zinc-700 w-16 py-2 rounded-xl text-center font-black text-sm outline-none" />
+                    <button onClick={() => ajustarPeso(m.id, 1)} className="w-8 h-8 rounded-full bg-yellow-400 text-black flex items-center justify-center active:scale-90">+</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <section className="mt-8 mb-6 p-4 bg-zinc-900 rounded-2xl border border-zinc-800">
+             <input placeholder="WhatsApp Jefe (ej: 56912345678)" value={whatsappJefe} onChange={e => setWhatsappJefe(e.target.value)} className="bg-black p-3 rounded-xl w-full text-sm outline-none border border-zinc-800 text-green-400" />
+          </section>
+
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-xl border-t border-zinc-800 z-50">
+            <div className="max-w-2xl mx-auto flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-[10px] font-black text-zinc-500 uppercase">Total a Pagar</p>
+                <h2 className="text-2xl font-black text-white leading-none">{formatearMoneda(totalPagar)}</h2>
+                <p className="text-[10px] font-bold text-yellow-400 mt-1">{formatearNumero(totalKilos)} KG TOTALES</p>
+              </div>
+              <button onClick={enviarWhatsApp} disabled={totalPagar === 0} className="bg-green-500 disabled:bg-zinc-800 text-black px-8 py-4 rounded-2xl font-black text-xs transition shadow-xl shadow-green-500/10 active:scale-95">ENVIAR WHATSAPP</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 500);
   </script>
 
-  <!-- ESTO FALTABA: Registro del Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('SW registrado', reg))
-          .catch(err => console.log('Error al registrar SW', err));
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Error:', err));
       });
     }
   </script>
