@@ -16,6 +16,8 @@
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #0e0e10; color: #f4f4f5; }
     input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .animate-slide-up { animation: slideUp 0.3s ease-out; }
   </style>
 </head>
 <body>
@@ -24,9 +26,11 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
+    // --- BASE DE DATOS DE MATERIALES ACTUALIZADA (v11) ---
     const MATERIALES_BASE = [
       { id: "cobre", name: "Cobre", shortName: "COBRE", price: 6500, color: "bg-orange-700", unit: "kg" },
       { id: "bronce", name: "Bronce", shortName: "BRONCE", price: 3800, color: "bg-amber-700", unit: "kg" },
+      { id: "rad_bronce", name: "Radiador Bronce", shortName: "R-BRO", price: 3200, color: "bg-orange-900", unit: "kg" },
       { id: "acero_inox", name: "Acero Inoxidable", shortName: "INOX", price: 800, color: "bg-blue-900", unit: "kg" },
       { id: "aluminio_l", name: "Aluminio Limpio", shortName: "ALU-L", price: 1100, color: "bg-slate-500", unit: "kg" },
       { id: "aluminio_s", name: "Aluminio Sucio", shortName: "ALU-S", price: 600, color: "bg-slate-700", unit: "kg" },
@@ -34,11 +38,13 @@
       { id: "rad_mix", name: "Radiador Mixto", shortName: "R-MIX", price: 2800, color: "bg-yellow-700", unit: "kg" },
       { id: "fierro_c", name: "Fierro Corto", shortName: "FIERRO", price: 130, color: "bg-zinc-700", unit: "kg" },
       { id: "lata", name: "Lata Fierro", shortName: "LATA", price: 90, color: "bg-zinc-600", unit: "kg" },
-      { id: "motor", name: "Motor (Unidad)", shortName: "MOTOR", price: 12000, color: "bg-purple-900", unit: "un" },
+      { id: "motor_un", name: "Motor Unidad (Nevera)", shortName: "MOT-UN", price: 450, color: "bg-purple-900", unit: "kg" },
+      { id: "motor_alu", name: "Motor Aluminio", shortName: "MOT-AL", price: 350, color: "bg-purple-700", unit: "kg" },
+      { id: "calefon_un", name: "Calefón (Unidad)", shortName: "CAL-UN", price: 12000, color: "bg-orange-800", unit: "un" },
+      { id: "calefon_kg", name: "Calefón (Kilo)", shortName: "CAL-KG", price: 1800, color: "bg-orange-950", unit: "kg" },
       { id: "caja_v", name: "Caja Vehículo", shortName: "CAJA-V", price: 15000, color: "bg-gray-800", unit: "un" },
       { id: "bat_u", name: "Batería (Unidad)", shortName: "BAT-U", price: 15000, color: "bg-red-900", unit: "un" },
       { id: "bat_k", name: "Batería (Kilo)", shortName: "BAT-K", price: 850, color: "bg-zinc-800", unit: "kg" },
-      { id: "calefon", name: "Calefón", shortName: "CALEF", price: 12000, color: "bg-amber-900", unit: "un" },
       { id: "catalitico", name: "Catalítico", shortName: "CATAL", price: 35000, color: "bg-amber-700", unit: "un" }
     ];
 
@@ -58,19 +64,19 @@
 
       useEffect(() => {
         const load = (key, def) => localStorage.getItem(key) ? JSON.parse(localStorage.getItem(key)) : def;
-        setSaldoCaja(Number(localStorage.getItem("saldo_caja_v8") || 0));
-        setComprasRealizadas(load("compras_v8", []));
-        setWhatsappJefe(localStorage.getItem("wa_jefe") || "");
-        setMateriales(load("precios_v8", MATERIALES_BASE));
-        setEmpresaNombre(localStorage.getItem("emp_nombre") || "COMPRA CHATARRA");
+        setSaldoCaja(Number(localStorage.getItem("saldo_caja_v11") || 0));
+        setComprasRealizadas(load("compras_v11", []));
+        setWhatsappJefe(localStorage.getItem("wa_jefe_v11") || "");
+        setMateriales(load("precios_v11", MATERIALES_BASE));
+        setEmpresaNombre(localStorage.getItem("emp_nombre_v11") || "COMPRA CHATARRA");
       }, []);
 
       useEffect(() => {
-        localStorage.setItem("saldo_caja_v8", saldoCaja);
-        localStorage.setItem("compras_v8", JSON.stringify(comprasRealizadas));
-        localStorage.setItem("wa_jefe", whatsappJefe);
-        localStorage.setItem("precios_v8", JSON.stringify(materiales));
-        localStorage.setItem("emp_nombre", empresaNombre);
+        localStorage.setItem("saldo_caja_v11", saldoCaja);
+        localStorage.setItem("compras_v11", JSON.stringify(comprasRealizadas));
+        localStorage.setItem("wa_jefe_v11", whatsappJefe);
+        localStorage.setItem("precios_v11", JSON.stringify(materiales));
+        localStorage.setItem("emp_nombre_v11", empresaNombre);
       }, [saldoCaja, comprasRealizadas, whatsappJefe, materiales, empresaNombre]);
 
       const formatearMoneda = (v) => new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(v || 0);
@@ -87,8 +93,9 @@
       const inventarioAcumulado = useMemo(() => {
         const resumen = {};
         comprasRealizadas.forEach(c => c.detalle.forEach(item => {
-          if (!resumen[item.id]) resumen[item.id] = { name: item.name, total: 0, unit: item.unit };
+          if (!resumen[item.id]) resumen[item.id] = { name: item.name, total: 0, valorTotal: 0, unit: item.unit };
           resumen[item.id].total += item.peso;
+          resumen[item.id].valorTotal += item.subtotal;
         }));
         return Object.values(resumen);
       }, [comprasRealizadas]);
@@ -96,40 +103,66 @@
       const finalizarCompra = () => {
         if (totalCompraActual === 0) return;
         const nueva = { id: Date.now(), total: totalCompraActual, metodo: metodoPago, cliente: {...clienteForm}, detalle: detalleVentaActual.filter(m => m.peso > 0) };
-        setComprasRealizadas([nueva, ...comprasRealizadas]);
         
-        // Enviar Reporte de esta compra
-        let txt = `*COMPRA - ${empresaNombre}*\n👤 ${clienteForm.nombre}\n🆔 ${clienteForm.rut}\n💰 *TOTAL:* ${formatearMoneda(totalCompraActual)}\n💳 *PAGO:* ${metodoPago.toUpperCase()}\n\n*DETALLE:*`;
-        nueva.detalle.forEach(d => txt += `\n- ${d.name}: ${d.peso} ${d.unit}`);
-        if(metodoPago === 'transferencia') txt += `\n\n*DATOS:* ${clienteForm.banco} | ${clienteForm.tipo} | ${clienteForm.cuenta}`;
+        let txt = `*RECIBO DE COMPRA - ${empresaNombre}*\n`;
+        txt += `━━━━━━━━━━━━━━━━━━━━\n`;
+        txt += `👤 *CLIENTE:* ${clienteForm.nombre || "N/A"}\n`;
+        txt += `🆔 *RUT:* ${clienteForm.rut || "N/A"}\n`;
+        txt += `💳 *PAGO:* ${metodoPago.toUpperCase()}\n`;
+        txt += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+        txt += `*DETALLE DE PRODUCTOS:*\n`;
+        
+        nueva.detalle.forEach(d => {
+          txt += `• ${d.name}\n  ${d.peso} ${d.unit} x ${formatearMoneda(d.price)} = *${formatearMoneda(d.subtotal)}*\n`;
+        });
+        
+        txt += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+        txt += `💰 *TOTAL A PAGAR:* ${formatearMoneda(totalCompraActual)}\n`;
+        txt += `━━━━━━━━━━━━━━━━━━━━\n`;
+        
+        if(metodoPago === 'transferencia') {
+          txt += `\n🏦 *DATOS BANCARIOS:* \n${clienteForm.banco} | ${clienteForm.tipo}\nNº ${clienteForm.cuenta}`;
+        }
+
+        setComprasRealizadas([nueva, ...comprasRealizadas]);
         window.open(`https://wa.me/${whatsappJefe.replace(/\D/g, "")}?text=${encodeURIComponent(txt)}`, "_blank");
 
         setPesos({}); setClienteForm({ nombre: "", rut: "", banco: "Banco Estado", tipo: "Cuenta RUT", cuenta: "" });
       };
 
       const enviarReporteDiario = () => {
-        let txt = `*RESUMEN DIARIO - ${empresaNombre}*\n━━━━━━━━━━━━━━\n💵 *EFECTIVO INICIAL:* ${formatearMoneda(saldoCaja)}\n📉 *GASTO EFECTIVO:* ${formatearMoneda(totalEfectivoHoy)}\n💳 *TOTAL TRANSFERENCIAS:* ${formatearMoneda(totalTransfHoy)}\n💰 *SALDO EN CAJA:* ${formatearMoneda(saldoDisponible)}\n\n*INVENTARIO COMPRADO:*`;
-        inventarioAcumulado.forEach(i => txt += `\n📦 ${i.name}: ${i.total.toFixed(2)} ${i.unit}`);
+        let txt = `*RESUMEN DIARIO - ${empresaNombre}*\n`;
+        txt += `━━━━━━━━━━━━━━━━━━━━\n`;
+        txt += `💵 *CAJA INICIAL:* ${formatearMoneda(saldoCaja)}\n`;
+        txt += `📉 *GASTO EFECTIVO:* ${formatearMoneda(totalEfectivoHoy)}\n`;
+        txt += `💳 *TOTAL TRANSFERID:* ${formatearMoneda(totalTransfHoy)}\n`;
+        txt += `💰 *SALDO FINAL:* ${formatearMoneda(saldoDisponible)}\n`;
+        txt += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+        txt += `*TOTAL COMPRADO HOY:*\n`;
+        
+        inventarioAcumulado.forEach(i => {
+          txt += `📦 ${i.name}: ${i.total.toFixed(2)} ${i.unit} -> *${formatearMoneda(i.valorTotal)}*\n`;
+        });
+        
         window.open(`https://wa.me/${whatsappJefe.replace(/\D/g, "")}?text=${encodeURIComponent(txt)}`, "_blank");
       };
 
       return (
         <div className="max-w-2xl mx-auto p-4 pb-48">
-          <header className="flex items-center justify-between mb-4 bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+          <header className="flex items-center justify-between mb-4 bg-zinc-900 p-4 rounded-2xl border border-zinc-800 shadow-xl">
             <input value={empresaNombre} onChange={e => setEmpresaNombre(e.target.value.toUpperCase())} className="bg-transparent font-black text-xl text-yellow-400 outline-none w-full" />
-            <button onClick={() => setEditandoPrecios(!editandoPrecios)} className={`px-4 py-2 rounded-xl text-[10px] font-black ${editandoPrecios ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-400'}`}>
+            <button onClick={() => setEditandoPrecios(!editandoPrecios)} className={`px-4 py-2 rounded-xl text-[10px] font-black transition ${editandoPrecios ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-400'}`}>
               {editandoPrecios ? 'LISTO' : 'EDITAR $'}
             </button>
           </header>
 
-          {/* Caja con Efectivo vs Transferencia */}
           <section className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 mb-4 shadow-xl">
             <div className="flex justify-between items-center mb-4">
               <div>
-                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Saldo Real en Caja</p>
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Saldo en Efectivo</p>
                 <h1 className="text-3xl font-black text-green-400">{formatearMoneda(saldoDisponible)}</h1>
               </div>
-              <button onClick={() => confirm("¿Reiniciar?") && (setComprasRealizadas([]), setSaldoCaja(0))} className="bg-zinc-800 p-2 rounded-lg"><i data-lucide="refresh-ccw" className="w-4 h-4"></i></button>
+              <button onClick={() => confirm("¿Reiniciar todo?") && (setComprasRealizadas([]), setSaldoCaja(0))} className="bg-zinc-800 p-2 rounded-lg"><i data-lucide="refresh-ccw" className="w-4 h-4"></i></button>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
                <div className="bg-black/40 p-2 rounded-xl border border-zinc-800">CARGAR CAJA: <input type="number" onBlur={e => setSaldoCaja(Number(e.target.value))} className="bg-transparent text-yellow-400 outline-none w-full text-lg font-black" /></div>
@@ -137,11 +170,10 @@
             </div>
           </section>
 
-          {/* Datos Cliente Detallados */}
           <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 space-y-2">
              <div className="flex gap-2 mb-2">
-                <button onClick={() => setMetodoPago("efectivo")} className={`flex-1 py-2 rounded-xl text-[10px] font-black border ${metodoPago==='efectivo'?'bg-yellow-400 text-black border-yellow-400':'bg-zinc-800 text-zinc-500 border-zinc-700'}`}>EFECTIVO</button>
-                <button onClick={() => setMetodoPago("transferencia")} className={`flex-1 py-2 rounded-xl text-[10px] font-black border ${metodoPago==='transferencia'?'bg-blue-500 text-white border-blue-500':'bg-zinc-800 text-zinc-500 border-zinc-700'}`}>TRANSFERENCIA</button>
+                <button onClick={() => setMetodoPago("efectivo")} className={`flex-1 py-3 rounded-xl text-[10px] font-black border transition ${metodoPago==='efectivo'?'bg-yellow-400 text-black border-yellow-400':'bg-zinc-800 text-zinc-500 border-zinc-700'}`}>EFECTIVO</button>
+                <button onClick={() => setMetodoPago("transferencia")} className={`flex-1 py-3 rounded-xl text-[10px] font-black border transition ${metodoPago==='transferencia'?'bg-blue-500 text-white border-blue-500':'bg-zinc-800 text-zinc-500 border-zinc-700'}`}>TRANSFERENCIA</button>
              </div>
              <input placeholder="Nombre Cliente" value={clienteForm.nombre} onChange={e => setClienteForm({...clienteForm, nombre: e.target.value})} className="w-full bg-black border border-zinc-800 p-3 rounded-xl text-xs outline-none" />
              <input placeholder="RUT" value={clienteForm.rut} onChange={e => setClienteForm({...clienteForm, rut: e.target.value})} className="w-full bg-black border border-zinc-800 p-3 rounded-xl text-xs outline-none" />
@@ -158,7 +190,6 @@
              )}
           </section>
 
-          {/* Lista Materiales */}
           <div className="space-y-2 mb-4">
             {materiales.map(m => (
               <div key={m.id} className={`p-4 rounded-2xl border transition-all ${pesos[m.id] > 0 ? 'bg-zinc-800 border-yellow-400' : 'bg-zinc-900 border-zinc-800'}`}>
@@ -180,22 +211,20 @@
             ))}
           </div>
 
-          {/* Configuración Reportes */}
           <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
              <input placeholder="WhatsApp Jefe (569...)" value={whatsappJefe} onChange={e => setWhatsappJefe(e.target.value)} className="w-full bg-black border border-zinc-800 p-3 rounded-xl text-xs outline-none text-green-400 font-bold" />
-             <button onClick={enviarReporteDiario} className="w-full mt-3 bg-zinc-800 py-3 rounded-xl text-[10px] font-black tracking-widest flex items-center justify-center gap-2">
+             <button onClick={enviarReporteDiario} className="w-full mt-3 bg-zinc-800 py-3 rounded-xl text-[10px] font-black tracking-widest flex items-center justify-center gap-2 active:scale-95 transition">
                 <i data-lucide="file-text" className="w-4 h-4"></i> ENVIAR REPORTE DEL DÍA AL JEFE
              </button>
           </section>
 
-          {/* Botón Flotante */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-xl border-t border-zinc-800 z-50">
             <div className="max-w-2xl mx-auto flex items-center gap-4">
               <div className="flex-1">
-                <p className="text-[9px] font-black text-zinc-500 uppercase">Pago {metodoPago === 'efectivo' ? 'en Efectivo' : 'por Transferencia'}</p>
+                <p className="text-[9px] font-black text-zinc-500 uppercase">Total a pagar</p>
                 <h2 className={`text-2xl font-black ${metodoPago === 'efectivo' ? 'text-white' : 'text-blue-400'}`}>{formatearMoneda(totalCompraActual)}</h2>
               </div>
-              <button onClick={finalizarCompra} disabled={totalCompraActual === 0} className={`px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition shadow-lg ${metodoPago === 'efectivo' ? 'bg-yellow-400 text-black shadow-yellow-500/10' : 'bg-blue-500 text-white shadow-blue-500/10'}`}>
+              <button onClick={finalizarCompra} disabled={totalCompraActual === 0} className={`px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition shadow-xl ${metodoPago === 'efectivo' ? 'bg-yellow-400 text-black shadow-yellow-500/10' : 'bg-blue-500 text-white shadow-blue-500/10'}`}>
                 FINALIZAR Y ENVIAR
               </button>
             </div>
