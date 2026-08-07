@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-  <title>Chatarra PRO - Gestión de Caja</title>
+  <title>Chatarra PRO - Precisión Total</title>
   
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#facc15">
@@ -46,7 +46,6 @@
     ];
 
     function App() {
-      // --- ESTADOS PRINCIPALES ---
       const [materiales, setMateriales] = useState(MATERIALES_BASE);
       const [pesos, setPesos] = useState({});
       const [editandoPrecios, setEditandoPrecios] = useState(false);
@@ -54,32 +53,45 @@
       const [whatsappJefe, setWhatsappJefe] = useState("");
       const [clienteForm, setClienteForm] = useState({ nombre: "", rut: "", cuenta: "", banco: "Cuenta RUT" });
       
-      // --- ESTADOS DE CAJA E INVENTARIO ---
-      const [saldoCaja, setSaldoCaja] = useState(0); // Dinero inicial que te dio el jefe
-      const [comprasRealizadas, setComprasRealizadas] = useState([]); // Historial del día
+      const [saldoCaja, setSaldoCaja] = useState(0); 
+      const [comprasRealizadas, setComprasRealizadas] = useState([]); 
 
-      // --- PERSISTENCIA ---
       useEffect(() => {
-        const storedCaja = localStorage.getItem("app_saldo_caja");
-        if (storedCaja) setSaldoCaja(Number(storedCaja));
-        
-        const storedHistory = localStorage.getItem("app_historial_compras");
+        const storedCaja = localStorage.getItem("app_saldo_caja_v5");
+        if (storedCaja) setSaldoCaja(parseFloat(storedCaja));
+        const storedHistory = localStorage.getItem("app_historial_compras_v5");
         if (storedHistory) setComprasRealizadas(JSON.parse(storedHistory));
-
         const storedWA = localStorage.getItem("app_whatsapp_jefe");
         if (storedWA) setWhatsappJefe(storedWA);
-
-        const storedPrices = localStorage.getItem("app_precios_v4");
+        const storedPrices = localStorage.getItem("app_precios_v5");
         if (storedPrices) setMateriales(JSON.parse(storedPrices));
       }, []);
 
-      useEffect(() => localStorage.setItem("app_saldo_caja", saldoCaja), [saldoCaja]);
-      useEffect(() => localStorage.setItem("app_historial_compras", JSON.stringify(comprasRealizadas)), [comprasRealizadas]);
+      useEffect(() => localStorage.setItem("app_saldo_caja_v5", saldoCaja), [saldoCaja]);
+      useEffect(() => localStorage.setItem("app_historial_compras_v5", JSON.stringify(comprasRealizadas)), [comprasRealizadas]);
       useEffect(() => localStorage.setItem("app_whatsapp_jefe", whatsappJefe), [whatsappJefe]);
-      useEffect(() => localStorage.setItem("app_precios_v4", JSON.stringify(materiales)), [materiales]);
+      useEffect(() => localStorage.setItem("app_precios_v5", JSON.stringify(materiales)), [materiales]);
 
-      // --- CALCULOS ---
-      const detalleVentaActual = useMemo(() => materiales.map(m => ({ ...m, peso: pesos[m.id] || 0, subtotal: (pesos[m.id] || 0) * m.price })), [materiales, pesos]);
+      // Formateo con decimales para dinero (opcional para CLP, útil para control exacto)
+      const formatearMoneda = (v) => new Intl.NumberFormat("es-CL", { 
+        style: "currency", 
+        currency: "CLP", 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2 
+      }).format(v || 0);
+
+      // Formateo de kilos con hasta 3 decimales
+      const formatearKilos = (val) => {
+        if (!val) return "0";
+        return val.toString().replace(".", ",");
+      };
+
+      const detalleVentaActual = useMemo(() => materiales.map(m => ({ 
+        ...m, 
+        peso: parseFloat(pesos[m.id] || 0), 
+        subtotal: parseFloat((pesos[m.id] || 0) * m.price) 
+      })), [materiales, pesos]);
+
       const totalCompraActual = detalleVentaActual.reduce((acc, curr) => acc + curr.subtotal, 0);
 
       const inventarioAcumulado = useMemo(() => {
@@ -87,17 +99,14 @@
         comprasRealizadas.forEach(compra => {
           compra.detalle.forEach(item => {
             if (!resumen[item.id]) resumen[item.id] = { name: item.name, totalPeso: 0, unit: item.unit };
-            resumen[item.id].totalPeso += item.peso;
+            resumen[item.id].totalPeso += parseFloat(item.peso);
           });
         });
         return Object.values(resumen);
       }, [comprasRealizadas]);
 
       const totalGastadoDia = comprasRealizadas.reduce((acc, c) => acc + c.total, 0);
-      const saldoDisponible = saldoCaja - totalGastadoDia;
-
-      // --- FUNCIONES ---
-      const formatearMoneda = (v) => new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(v || 0);
+      const saldoDisponible = parseFloat((saldoCaja - totalGastadoDia).toFixed(2));
 
       const finalizarCompra = () => {
         if (totalCompraActual === 0) return;
@@ -108,49 +117,50 @@
           detalle: detalleVentaActual.filter(m => m.peso > 0)
         };
         setComprasRealizadas([nuevaCompra, ...comprasRealizadas]);
-        setPesos({}); // Limpia pesos
-        setClienteForm({ nombre: "", rut: "", cuenta: "", banco: "Cuenta RUT" }); // Limpia cliente
-        alert("✅ Compra Finalizada y Guardada en Inventario");
+        setPesos({});
+        setClienteForm({ nombre: "", rut: "", cuenta: "", banco: "Cuenta RUT" });
+        alert("✅ Compra Finalizada. Inventario actualizado.");
       };
 
       const reiniciarDia = () => {
-        if (confirm("¿Seguro que quieres borrar el historial y el saldo de hoy?")) {
+        if (confirm("¿Borrar todo el historial y saldo?")) {
           setComprasRealizadas([]);
           setSaldoCaja(0);
-          localStorage.removeItem("app_saldo_caja");
-          localStorage.removeItem("app_historial_compras");
         }
       };
 
       return (
         <div className="max-w-2xl mx-auto p-4 pb-48">
-          {/* Dashboard de Caja */}
+          {/* Dashboard de Caja Preciso */}
           <section className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 mb-6 shadow-2xl">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Efectivo Disponible</p>
-                <h1 className={`text-3xl font-black ${saldoDisponible < 50000 ? 'text-red-500' : 'text-green-400'}`}>
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Efectivo en Caja</p>
+                <h1 className={`text-3xl font-black ${saldoDisponible < 0 ? 'text-red-500' : 'text-green-400'}`}>
                   {formatearMoneda(saldoDisponible)}
                 </h1>
               </div>
-              <button onClick={reiniciarDia} className="bg-zinc-800 p-2 rounded-lg text-zinc-500 hover:text-white">
+              <button onClick={reiniciarDia} className="bg-zinc-800 p-2 rounded-lg text-zinc-500">
                 <i data-lucide="refresh-ccw" className="w-4 h-4"></i>
               </button>
             </div>
             
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <p className="text-[9px] text-zinc-500 font-bold uppercase mb-1">Carga de Dinero (Jefe)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase mb-1">Cargar Efectivo</p>
                 <input 
                   type="number" 
-                  placeholder="Ej: 500000" 
-                  onBlur={(e) => setSaldoCaja(Number(e.target.value))}
-                  className="w-full bg-black border border-zinc-800 p-2 rounded-xl text-sm font-bold text-yellow-400 outline-none focus:border-yellow-400"
+                  step="0.01"
+                  placeholder="0.00" 
+                  onChange={(e) => setSaldoCaja(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-black border border-zinc-800 p-3 rounded-xl text-sm font-black text-yellow-400 outline-none focus:border-yellow-400"
                 />
               </div>
-              <div className="flex-1">
-                <p className="text-[9px] text-zinc-500 font-bold uppercase mb-1">Total Gastado Hoy</p>
-                <p className="p-2 text-sm font-bold text-white">{formatearMoneda(totalGastadoDia)}</p>
+              <div>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase mb-1">Gasto Total Hoy</p>
+                <p className="p-3 text-sm font-black text-white bg-black/30 rounded-xl border border-zinc-800/50">
+                  {formatearMoneda(totalGastadoDia)}
+                </p>
               </div>
             </div>
           </section>
@@ -158,74 +168,83 @@
           {/* Formulario Cliente */}
           <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-6 space-y-3">
              <div className="flex justify-between items-center">
-                <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Datos de la Compra</h2>
+                <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Nueva Transacción</h2>
                 <button onClick={() => setEditandoPrecios(!editandoPrecios)} className="text-[10px] font-bold text-yellow-400 uppercase">
-                  {editandoPrecios ? '[ Listo ]' : '[ Editar Precios ]'}
+                  {editandoPrecios ? '[ Guardar ]' : '[ Cambiar Precios ]'}
                 </button>
              </div>
              <input placeholder="Nombre Cliente" value={clienteForm.nombre} onChange={e => setClienteForm({...clienteForm, nombre: e.target.value})} className="w-full bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none" />
              <div className="grid grid-cols-2 gap-2">
                 <input placeholder="RUT" value={clienteForm.rut} onChange={e => setClienteForm({...clienteForm, rut: e.target.value})} className="bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none" />
-                <input placeholder="Cuenta Bancaria" value={clienteForm.cuenta} onChange={e => setClienteForm({...clienteForm, cuenta: e.target.value})} className="bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none" />
+                <input placeholder="Cuenta" value={clienteForm.cuenta} onChange={e => setClienteForm({...clienteForm, cuenta: e.target.value})} className="bg-black border border-zinc-800 p-3 rounded-xl text-sm outline-none" />
              </div>
           </section>
 
-          {/* Lista de Materiales */}
+          {/* Lista de Materiales con Decimales */}
           <div className="space-y-2 mb-8">
             {materiales.map(m => (
               <div key={m.id} className={`p-4 rounded-2xl border transition-all ${pesos[m.id] > 0 ? 'bg-zinc-800 border-yellow-400' : 'bg-zinc-900 border-zinc-800'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl ${m.color} flex items-center justify-center font-black text-[9px] text-white`}>{m.shortName}</div>
+                    <div className={`w-10 h-10 rounded-xl ${m.color} flex items-center justify-center font-black text-[9px] text-white uppercase`}>{m.shortName}</div>
                     <div>
                       <h4 className="font-bold text-xs">{m.name}</h4>
                       {editandoPrecios ? 
-                        <input type="number" value={m.price} onChange={e => setMateriales(ms => ms.map(x => x.id === m.id ? {...x, price: Number(e.target.value)} : x))} className="bg-black text-yellow-400 text-xs font-bold w-20 p-1 rounded border border-zinc-700" />
-                        : <p className="text-[10px] text-zinc-500 font-bold">{formatearMoneda(m.price)}</p>
+                        <input type="number" step="0.1" value={m.price} onChange={e => setMateriales(ms => ms.map(x => x.id === m.id ? {...x, price: parseFloat(e.target.value)} : x))} className="bg-black text-yellow-400 text-xs font-bold w-20 p-1 rounded border border-zinc-700" />
+                        : <p className="text-[10px] text-zinc-500 font-bold">{formatearMoneda(m.price)} / {m.unit}</p>
                       }
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setPesos({...pesos, [m.id]: Math.max(0, (pesos[m.id] || 0) - 1)})} className="w-8 h-8 rounded-full bg-zinc-700 text-white font-bold">-</button>
+                    <button onClick={() => setPesos({...pesos, [m.id]: Math.max(0, parseFloat(((pesos[m.id] || 0) - 0.5).toFixed(3)))})} className="w-8 h-8 rounded-full bg-zinc-700 text-white font-black">-0.5</button>
                     <input type="text" inputMode="decimal" value={pesos[m.id] || ""} onChange={e => {
+                      const v = e.target.value.replace(",", ".");
+                      setPesos({...pesos, [m.id]: v});
+                    }} onBlur={e => {
                       const v = parseFloat(e.target.value.replace(",", "."));
                       setPesos({...pesos, [m.id]: isNaN(v) ? 0 : v});
-                    }} placeholder="0" className="bg-black border border-zinc-700 w-14 py-2 rounded-xl text-center font-black text-xs outline-none" />
-                    <button onClick={() => setPesos({...pesos, [m.id]: (pesos[m.id] || 0) + 1})} className="w-8 h-8 rounded-full bg-yellow-400 text-black font-bold">+</button>
+                    }} placeholder="0.00" className="bg-black border border-zinc-700 w-20 py-2 rounded-xl text-center font-black text-sm outline-none focus:border-yellow-400" />
+                    <button onClick={() => setPesos({...pesos, [m.id]: parseFloat(((pesos[m.id] || 0) + 0.5).toFixed(3))})} className="w-8 h-8 rounded-full bg-yellow-400 text-black font-black">+0.5</button>
                   </div>
                 </div>
+                {pesos[m.id] > 0 && (
+                  <div className="mt-2 text-right border-t border-zinc-700 pt-1">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase mr-2">Subtotal:</span>
+                    <span className="text-xs font-black text-yellow-400">{formatearMoneda((pesos[m.id] || 0) * m.price)}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
 
-          {/* Inventario Acumulado del Día */}
+          {/* Inventario Acumulado con Decimales */}
           {inventarioAcumulado.length > 0 && (
-            <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-12">
-               <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-4">Material Acumulado (Hoy)</h3>
-               <div className="grid grid-cols-2 gap-3">
+            <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-12">
+               <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-4">Resumen Acumulado del Día</h3>
+               <div className="grid grid-cols-1 gap-2">
                   {inventarioAcumulado.map(item => (
-                    <div key={item.name} className="flex justify-between items-center bg-black/50 p-2 rounded-xl border border-zinc-800">
-                       <span className="text-[10px] font-bold text-zinc-400">{item.name}</span>
-                       <span className="text-xs font-black text-yellow-400">{item.totalPeso} {item.unit}</span>
+                    <div key={item.name} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
+                       <span className="text-xs font-bold text-zinc-400">{item.name}</span>
+                       <span className="text-sm font-black text-yellow-400">{item.totalPeso.toFixed(3).replace(".", ",")} {item.unit}</span>
                     </div>
                   ))}
                </div>
             </section>
           )}
 
-          {/* Footer de Pago */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-xl border-t border-zinc-800 z-50">
+          {/* Pago Actual Fijo */}
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/95 backdrop-blur-xl border-t border-zinc-800 z-50">
             <div className="max-w-2xl mx-auto flex items-center gap-4">
               <div className="flex-1">
-                <p className="text-[9px] font-black text-zinc-500 uppercase">Total Compra Actual</p>
+                <p className="text-[9px] font-black text-zinc-500 uppercase">Pago de esta compra</p>
                 <h2 className="text-2xl font-black text-white">{formatearMoneda(totalCompraActual)}</h2>
               </div>
               <button 
                 onClick={finalizarCompra} 
                 disabled={totalCompraActual === 0} 
-                className="bg-yellow-400 disabled:bg-zinc-800 text-black px-6 py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition"
+                className="bg-yellow-400 disabled:bg-zinc-800 text-black px-8 py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition uppercase"
               >
-                FINALIZAR COMPRA
+                Pagar y Guardar
               </button>
             </div>
           </div>
